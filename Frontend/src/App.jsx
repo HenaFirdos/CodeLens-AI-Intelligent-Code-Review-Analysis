@@ -125,11 +125,20 @@ function App() {
     setError('')
 
     try {
-  const res = await fetch('https://codelens-ai-backend-93jw.onrender.com/ai/get-review', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, language, mode })
-  });
+    const res = await fetch(
+      'https://codelens-ai-backend-93jw.onrender.com/ai/get-review',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          code,
+          language,
+          mode
+        })
+      }
+    )
 
       const data = await res.json().catch(() => null)
 
