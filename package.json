@@ -1,0 +1,14 @@
+{
+  "name": "code-review-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm --prefix BackEnd run dev\" \"npm --prefix Frontend run dev\""
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^17.2.3",
+    "nodemon": "^3.1.10",
+    "concurrently": "^8.0.1"
+  }
+}
