@@ -149,8 +149,12 @@ function App() {
     setError('')
 
     try {
+      const API_URL =
+        import.meta.env.VITE_API_URL ||
+        'https://codelens-ai-backend-93jw.onrender.com'
+
       const res = await fetch(
-        '/ai/get-review',
+        `${API_URL}/ai/get-review`,
         {
           method: 'POST',
           headers: {
