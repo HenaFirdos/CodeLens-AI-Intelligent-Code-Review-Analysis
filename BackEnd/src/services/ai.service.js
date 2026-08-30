@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
 const REVIEW_MODES = {
     quick: "Quick Review: keep the review short and focus only on the most important findings.",
@@ -67,15 +67,12 @@ function getModel() {
         throw new Error("GOOGLE_GEMINI_KEY is missing");
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_KEY);
+    return new GoogleGenAI({
+        apiKey: process.env.GOOGLE_GEMINI_KEY
+    });
+}
 
-    return genAI.getGenerativeModel({
-        model: "gemini-3.6-flash",
-        generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.2
-        },
-        systemInstruction: `
+const SYSTEM_INSTRUCTION = `
 You are an expert software engineer and code reviewer.
 
 Analyze the supplied source code accurately.
@@ -136,9 +133,7 @@ Required schema:
   ],
   "improved_code": "Corrected code only when useful, otherwise empty string"
 }
-`
-    });
-}
+`;
 
 function withLineNumbers(code) {
     return code
@@ -197,29 +192,70 @@ function normalizeScore(score, statistics) {
 
 function normalizeReview(review, rawResponse) {
     const issues = Array.isArray(review.issues) ? review.issues : [];
+
     const normalizedIssues = issues
         .filter(Boolean)
         .map((issue) => ({
-            severity: ["critical", "error", "warning", "suggestion", "good"].includes(issue.severity) ? issue.severity : "suggestion",
+            severity: [
+                "critical",
+                "error",
+                "warning",
+                "suggestion",
+                "good"
+            ].includes(issue.severity)
+                ? issue.severity
+                : "suggestion",
+
             category: issue.category || "maintainability",
-            line: Number.isInteger(issue.line) && issue.line > 0 ? issue.line : null,
+
+            line:
+                Number.isInteger(issue.line) && issue.line > 0
+                    ? issue.line
+                    : null,
+
             title: issue.title || "Review finding",
+
             description: issue.description || "",
+
             why_it_matters: issue.why_it_matters || "",
+
             suggested_fix: issue.suggested_fix || ""
         }));
 
     const statistics = {
-        critical: normalizedIssues.filter((issue) => issue.severity === "critical").length,
-        errors: normalizedIssues.filter((issue) => issue.severity === "error").length,
-        warnings: normalizedIssues.filter((issue) => issue.severity === "warning").length,
-        suggestions: normalizedIssues.filter((issue) => issue.severity === "suggestion").length,
-        good: normalizedIssues.filter((issue) => issue.severity === "good").length
+        critical: normalizedIssues.filter(
+            (issue) => issue.severity === "critical"
+        ).length,
+
+        errors: normalizedIssues.filter(
+            (issue) => issue.severity === "error"
+        ).length,
+
+        warnings: normalizedIssues.filter(
+            (issue) => issue.severity === "warning"
+        ).length,
+
+        suggestions: normalizedIssues.filter(
+            (issue) => issue.severity === "suggestion"
+        ).length,
+
+        good: normalizedIssues.filter(
+            (issue) => issue.severity === "good"
+        ).length
     };
 
     const hasCritical = statistics.critical > 0;
-    const hasIssues = hasCritical || statistics.errors > 0 || statistics.warnings > 0;
-    const verdict = ["working", "issues_found", "critical"].includes(review.verdict)
+
+    const hasIssues =
+        hasCritical ||
+        statistics.errors > 0 ||
+        statistics.warnings > 0;
+
+    const verdict = [
+        "working",
+        "issues_found",
+        "critical"
+    ].includes(review.verdict)
         ? review.verdict
         : hasCritical
             ? "critical"
@@ -229,37 +265,78 @@ function normalizeReview(review, rawResponse) {
 
     return {
         verdict,
+
         summary: review.summary || "Review complete.",
+
         language: review.language || "Unknown",
+
         score: normalizeScore(review.score, statistics),
+
         statistics,
+
         issues: normalizedIssues,
+
         complexity: {
             time: review.complexity?.time || "Unknown",
             space: review.complexity?.space || "Unknown",
             explanation: review.complexity?.explanation || ""
         },
+
         security: {
-            status: ["safe", "concerns_found", "not_applicable"].includes(review.security?.status)
+            status: [
+                "safe",
+                "concerns_found",
+                "not_applicable"
+            ].includes(review.security?.status)
                 ? review.security.status
                 : "not_applicable",
-            findings: Array.isArray(review.security?.findings) ? review.security.findings.filter(Boolean) : []
+
+            findings: Array.isArray(review.security?.findings)
+                ? review.security.findings.filter(Boolean)
+                : []
         },
-        edge_cases: Array.isArray(review.edge_cases) ? review.edge_cases.filter(Boolean) : [],
-        test_cases: Array.isArray(review.test_cases) ? review.test_cases.filter(Boolean) : [],
-        improved_code: typeof review.improved_code === "string" ? review.improved_code : "",
+
+        edge_cases: Array.isArray(review.edge_cases)
+            ? review.edge_cases.filter(Boolean)
+            : [],
+
+        test_cases: Array.isArray(review.test_cases)
+            ? review.test_cases.filter(Boolean)
+            : [],
+
+        improved_code:
+            typeof review.improved_code === "string"
+                ? review.improved_code
+                : "",
+
         raw_response: rawResponse
     };
 }
 
-async function generateContent({ code, language = "Auto Detect", mode = "full" }) {
-    const model = getModel();
-    const selectedMode = REVIEW_MODES[mode] || REVIEW_MODES.full;
-    const selectedLanguage = SUPPORTED_LANGUAGES.includes(language) ? language : "Auto Detect";
-    const promptWithLineNumbers = withLineNumbers(code);
+async function generateContent({
+    code,
+    language = "Auto Detect",
+    mode = "full"
+}) {
+    const ai = getModel();
 
-    const result = await model.generateContent(`
+    const selectedMode =
+        REVIEW_MODES[mode] || REVIEW_MODES.full;
+
+    const selectedLanguage =
+        SUPPORTED_LANGUAGES.includes(language)
+            ? language
+            : "Auto Detect";
+
+    const promptWithLineNumbers =
+        withLineNumbers(code);
+
+    const result = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+
+        contents: `
 Review mode: ${selectedMode}
+
 Selected language: ${selectedLanguage}
 
 Review this code. The numbers at the start of each line are line numbers for reference only.
@@ -267,14 +344,28 @@ Review this code. The numbers at the start of each line are line numbers for ref
 \`\`\`
 ${promptWithLineNumbers}
 \`\`\`
-`);
+`,
 
-    const rawResponse = result.response.text();
+        config: {
+            responseMimeType: "application/json",
+            temperature: 0.2,
+            systemInstruction: SYSTEM_INSTRUCTION
+        }
+    });
+
+    const rawResponse = result.text;
 
     try {
-        return normalizeReview(extractJson(rawResponse), rawResponse);
+        return normalizeReview(
+            extractJson(rawResponse),
+            rawResponse
+        );
     } catch (error) {
-        console.error("AI JSON parse failed:", error.message);
+        console.error(
+            "AI JSON parse failed:",
+            error.message
+        );
+
         return {
             ...EMPTY_REVIEW,
             raw_response: rawResponse
